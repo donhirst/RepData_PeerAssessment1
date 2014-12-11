@@ -1,0 +1,172 @@
+PA_1_repdata-016
+author: "Donhirst"
+date: "December 8, 2014"
+output: html_document
+---
+
+This is an R Markdown document written for the Coursera course on Reproducible Research, repdata-16, Dec 2014.
+The data set is from a collection of personal activity data,"activity.csv", recorded by personal fitness devices and may be found at:
+        
+                https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip
+
+
+The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day. To run the script the data should be downloaded to the working directory.
+The variables included in this dataset are:
+
+steps: Number of steps taking in a 5-minute interval (missing values are coded as NA)
+
+date: The date on which the measurement was taken in YYYY-MM-DD format
+
+interval: Identifier for the 5-minute interval in which measurement was taken
+
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset. The first five rows are:
+
+   steps       date       interval
+1    NA    2012-10-01        0
+2    NA    2012-10-01        5
+3    NA    2012-10-01       10
+4    NA    2012-10-01       15
+5    NA    2012-10-01       20
+6    NA    2012-10-01       25 
+
+First 
+```{r echo = TRUE}
+library(plyr)
+library(lattice)
+```
+
+
+The data are read in:
+```{r echo = TRUE}
+personal_data <- read.csv("activity.csv", header = TRUE)
+```
+Only the first two columns (steps and date) are needed for the first part of this assignment.
+
+```{r echo = TRUE}
+personal_steps <- personal_data[,1:2]
+```
+
+Make a histogram of the number of steps per day
+
+```{r, echo=TRUE}
+total_steps <- aggregate(.~ date, data = personal_steps, sum)
+hist(total_steps$steps, breaks = nrow(total_steps)-1, xlab= "Total number of steps per day", main = "Total number of steps per day")
+```
+
+Find the mean and median total number of steps/day
+
+```{r echo = TRUE}
+mean_steps <- mean(total_steps$steps)
+sprintf("The mean of the total steps per day = %f", mean_steps)
+median_steps <- median(total_steps$steps)
+sprintf("The median of the total steps per day = %f", median_steps)
+```
+
+The next task is to find the average daily activity pattern.  The following r code plots the 5-minute time interval (x-axis) vs
+the average number of steps taken averaged across all days (y-axis). Only the first (steps) and third (interval)columns are needed.
+```{r echo = TRUE}
+average_steps <- personal_data[,c(1,3)]
+interval_steps <- aggregate(.~ interval, data = average_steps, mean)
+plot(interval_steps$interval, interval_steps$steps, type = "l", xlab = "5-minute interval", ylab = "average steps per interval", main = "Steps per Interval")
+```
+
+Find the maximum number of steps and the interval in which they occur.
+```{r echo = TRUE}
+max_steps <- max(interval_steps$steps)
+sprintf("The maximum number of steps per interval is %f ", max_steps)
+interval_max_steps <- subset(interval_steps, steps == max_steps)
+sprintf("The interval containing the maximum number of steps is %i",interval_max_steps[,1])
+```
+
+Up to now, missing numbers (NAs) have been ignored.  A question arises if these missing values could introduce bias into the results or calculations. One way to deal with this would be to develop  a (dubious) strategy of somehow inventing numbers to stand for the missing ones.  This seems a very questionable proceedure but as this is a requirement for this exercise it has to be done. 
+
+First the number of rows of the original data set with NAs is calculated.
+```{r echo = TRUE}
+number_rows_noNAs <- sum(is.na(personal_data$steps))
+sprintf("The number of rows with no NAs is: %i", number_rows_noNAs)
+```
+
+Now to figure out how to fill in the NAs with sythesized (fake) numbers.  The means for steps per day and per interval are available or easily calculated from the r code above. The following code adds a column (new_steps) to the orginal data frame (personal_data) which is the average number of steps for each interval 
+```{r echo = TRUE}
+new_mean_steps <-tapply(personal_data$steps, personal_data$interval, mean, na.rm = TRUE)
+new_mean_steps <- as.data.frame(new_mean_steps)
+
+for(i in 1:nrow(personal_data)){
+        
+  if (is.na(personal_data[i,1])) {
+
+                         j <- personal_data$interval[i]
+                         j = as.character(j)
+                       interval_mean <- new_mean_steps[j,1] 
+                       personal_data[i,1] <- interval_mean
+                
+  }
+}
+```
+
+Only the first two columns (steps and date) are needed for the first part of this assignment.
+```{r echo = TRUE}
+personal_steps <- personal_data[,1:2]
+```
+
+Make a histogram of the number of steps per day from the imputed data
+```{r echo = TRUE}
+imputed_total_steps <- aggregate(.~ date, data = personal_steps, sum)
+hist(imputed_total_steps$steps, breaks = nrow(total_steps)-1, xlab= "Total number of steps per day", main = "Total number of steps per day (imputed values)")
+```
+
+Find the mean and median total number of steps/day for the imputed data
+```{r echo = TRUE}
+imputed_mean_steps <- mean(imputed_total_steps$steps)
+sprintf("The mean of the total steps per day (imputed values) = %f", imputed_mean_steps)
+imputed_median_steps <- median(imputed_total_steps$steps)
+sprintf("The median of the total steps per day (imputed values) = %f", imputed_median_steps)
+mean_diff<- imputed_mean_steps - mean_steps
+sprintf("The difference between the imputed mean and the original mean is: %f", mean_diff)
+median_diff <- imputed_median_steps - median_steps
+sprintf("The difference between the imputed median and the original median is: %f", median_diff)
+```
+
+The fact that the means are the same is not too suprising since the mean for each interval was used to replace the NAs in the data set.
+The difference in the medians is expected since it would be unlikely that the imputed data would be optimized for both the mean and median.
+Nevertheless the difference compared to the maximum is about 0.01 %. The conclusion is that the impact is minimal.
+
+The next task is to investigate the difference between activity on weekdays and on weekend using the imputed data set.
+
+First, as the date values of the data file are factors they need to be changed into class "date."
+Second a new variable (column), week, will be added to the imputed data frame.
+Produce two character strings: "weekend" and "weekday."
+Condense "day_of_week" variable into two levels: "weekend" and "weekday."
+
+```{r echo = TRUE}
+personal_data$date <- as.Date(personal_data$date)
+personal_data <- mutate(personal_data, day_of_week = weekdays(personal_data$date))
+weekday <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+weekend <- c("Saturday", "Sunday")
+personal_data$day_of_week <- as.factor(personal_data$day_of_week)
+levels(personal_data$day_of_week)<- list(weekday = weekday, weekend = weekend)
+```
+
+Now to make a panel plot. This will be a time series plot of the 5 minute intervals (x-axis) vs the average number of
+steps taken (y-axis) averaged over all weekdays or weekends.
+First, get rid of the "date" column which is of no interest.
+Second the average is taken for each interval and week level (weekend or weekday).
+Aggregate trashes the headers so the headers are renamed to something meaningful.
+Finally, we plot with a panel plot with xyplot
+
+```{r echo = TRUE}
+week_average_steps <- personal_data[,c(1,3,4)]
+week_interval_steps <- aggregate(week_average_steps$steps, list(week_average_steps$interval,week_average_steps$day_of_week), mean)
+names(week_interval_steps)<- c("interval", "week_level", "mean_steps")
+
+means_plot<-xyplot (mean_steps~ interval | week_level, data = week_interval_steps, layout = c(1,2), xlab = "5-minute interval", ylab = "average steps per interval", 
+        main = "Steps per Interval", type = "l")
+print(means_plot)
+```
+
+
+Clearly if this were a research paper the last plots would be compared and analyzed.  It is clear in both the weekend and the weekday cases that
+very few people are exercising or even moving much early in the morning (the first 500 intervals or so).  The spike in the week day at about the
+800 interval is probably people going to work. Apparently people don't get off work all at the same time as there is only a small, if discernable
+evening spike.  The weekend in flatter since people are up and moving whereas in the weekday, once they get to work, most persons are sitting at 
+their desk or a computer. More could probably be extracted from these data but analysis was not really in the assignment.
